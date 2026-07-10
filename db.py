@@ -74,22 +74,26 @@ def save_alert(source: str, yolo_dets: list, face_result: dict,
                email_recipient: str = ""):
     from utils import DANGER_LABELS
 
-    # كل الـ YOLO detections بغض النظر عن DANGER_LABELS
-    yolo_alerts = [label for (_, _, label) in yolo_dets]
-    face_alerts = face_result.get("alerts", [])
-    all_alerts  = list(set(yolo_alerts + face_alerts))
+    # All raw YOLO detections (Seatbelt + No Seatbelt + ...) — used for logging/display only
+    yolo_raw = [label for (_, _, label) in yolo_dets]
 
-    # لو مفيش اي detection خالص متحفظش
+    # Only real violations (e.g. "No Seatbelt"), not just anything that was detected.
+    # A positive "Seatbelt" detection is never treated as a violation.
+    yolo_violations = [l for l in yolo_raw if l in DANGER_LABELS]
+    face_alerts     = face_result.get("alerts", [])
+    all_alerts      = list(set(yolo_violations + face_alerts))
+
+    # If there are no actual violations at all, don't save anything
     if not all_alerts:
         return False
 
-    # الـ danger alerts للإشعارات بس
-    danger_alerts = [a for a in all_alerts if a in DANGER_LABELS]
+    # Everything in all_alerts is already a real violation at this point
+    danger_alerts = all_alerts
 
     risk_state = face_result.get("state", "SAFE")
 
-    # لو في yolo detection خد WARNING على الأقل
-    if yolo_alerts and risk_state == "SAFE":
+    # If there's a real YOLO violation (e.g. No Seatbelt), bump to at least WARNING
+    if yolo_violations and risk_state == "SAFE":
         risk_state = "WARNING"
 
     record = {
@@ -98,7 +102,7 @@ def save_alert(source: str, yolo_dets: list, face_result: dict,
         "alerts":          all_alerts,
         "risk_state":      risk_state,
         "risk_score":      round(face_result.get("risk_score", 0.0), 3),
-        "yolo_detections": yolo_alerts,
+        "yolo_detections": yolo_raw,
         "face_alerts":     face_alerts,
         "ear":             round(face_result.get("ear", 0.0), 3),
         "mar":             round(face_result.get("mar", 0.0), 3),
