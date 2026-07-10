@@ -6,7 +6,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils import (load_yolo_models, run_yolo_models, FaceAnalyzer,
                    draw_yolo_boxes, draw_face_overlay,
-                   get_color, DANGER_LABELS)
+                   get_color, DANGER_LABELS, get_mediapipe_status)
 from db import save_alert, check_connection
 
 logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "logo.png")
@@ -47,6 +47,10 @@ with top_cols[2]:
 
 st.markdown("## 🚗 Driver Monitoring System")
 st.caption("Live webcam-based driver monitoring")
+
+mp_ok, mp_msg = get_mediapipe_status()
+if not mp_ok:
+    st.warning(f"⚠️ Face analysis (Drowsiness/Yawning/Distraction) is currently disabled:\n\n{mp_msg}")
 
 run = st.toggle("Start Camera", value=False)
 
