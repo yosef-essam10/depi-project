@@ -1,0 +1,7 @@
+config.py
+dms_app/models/
+__pycache__/
+*.pyc
+.streamlit/
+dms_app/__pycache__/
+dms_app/pages/__pycache__/
