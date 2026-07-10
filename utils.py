@@ -10,12 +10,17 @@ try:
     from mediapipe.tasks import python as mp_python
     from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions, RunningMode
     MEDIAPIPE_OK = True
+    MEDIAPIPE_IMPORT_ERROR = None
 except Exception as e:
     MEDIAPIPE_OK = False
+    MEDIAPIPE_IMPORT_ERROR = str(e)
     print(f"MediaPipe import error: {e}")
 
 MODEL_DIR       = os.path.join(os.path.dirname(__file__), "models")
 FACE_MODEL_PATH = os.path.join(MODEL_DIR, "face_landmarker.task")
+
+# Updated whenever the Face Landmarker model fails to load/init after a successful import
+LANDMARKER_INIT_ERROR = None
 
 YOLO_COLORS = {
     "Seatbelt":           "#22c55e",
@@ -156,7 +161,11 @@ def _enhance(img):
 
 
 def _make_landmarker():
+    global LANDMARKER_INIT_ERROR
+    LANDMARKER_INIT_ERROR = None
+
     if not MEDIAPIPE_OK:
+        LANDMARKER_INIT_ERROR = MEDIAPIPE_IMPORT_ERROR or "MediaPipe import failed"
         return None
     if not os.path.exists(FACE_MODEL_PATH):
         try:
@@ -166,6 +175,7 @@ def _make_landmarker():
             urllib.request.urlretrieve(url, FACE_MODEL_PATH)
         except Exception as e:
             print(f"Failed to download face model: {e}")
+            LANDMARKER_INIT_ERROR = f"Failed to download face model: {e}"
             return None
     try:
         options = FaceLandmarkerOptions(
@@ -179,7 +189,32 @@ def _make_landmarker():
         return FaceLandmarker.create_from_options(options)
     except Exception as e:
         print(f"FaceLandmarker init error: {e}")
+        LANDMARKER_INIT_ERROR = str(e)
         return None
+
+
+def get_mediapipe_status():
+    """
+    Returns (ok, message).
+    If ok is False, message explains the real reason MediaPipe isn't working,
+    so it can be shown in the UI instead of staying buried in the server logs.
+    """
+    if not MEDIAPIPE_OK:
+        reason = MEDIAPIPE_IMPORT_ERROR or "unknown reason"
+        hint = ""
+        if "portaudio" in reason.lower() or "sounddevice" in reason.lower():
+            hint = (
+                "\n\nMost likely cause: the `sounddevice` package (a new dependency pulled in "
+                "by mediapipe) requires a system library called `libportaudio2` that isn't "
+                "available on Streamlit Community Cloud by default. Fix: add a `packages.txt` "
+                "file in the project root containing the line `libportaudio2`, then Reboot the app."
+            )
+        return False, f"MediaPipe import failed: `{reason}`{hint}"
+
+    if LANDMARKER_INIT_ERROR:
+        return False, f"Face Landmarker model failed to load: `{LANDMARKER_INIT_ERROR}`"
+
+    return True, ""
 
 
 def _detect_face(landmarker, frame_bgr):
